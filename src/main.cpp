@@ -206,6 +206,32 @@ static void draw_top_strap() {
   u8g2.setFont(u8g2_font_ncenR12_tf);
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
+
+  // Right cluster: [battery icon] "<n>%" [bolt-if-charging].
+  bool has_cell  = batt.pct >= 0;
+  bool show_bolt = has_cell && charging_hint();
+  if (!has_cell) return;
+
+  char pct_txt[8];
+  snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
+
+  constexpr int GAP       = 4;
+  constexpr int BATT_SLOT = BATT_W + 2 + GAP;   // body + nub + gap
+
+  int pct_w  = u8g2.getUTF8Width(pct_txt);
+  int bolt_w = show_bolt ? GAP + BOLT_W : 0;
+  int total  = BATT_SLOT + pct_w + bolt_w;
+
+  int ascent = u8g2.getFontAscent();
+  int y_icon = Y_STRAP_BASELINE - ascent;
+
+  int x = LCD_W - PAD_X - total;
+  draw_batt_icon(x, y_icon, batt.pct);
+  x += BATT_SLOT;
+  u8g2.setCursor(x, Y_STRAP_BASELINE);
+  u8g2.print(pct_txt);
+  x += pct_w;
+  if (show_bolt) draw_bolt(x + GAP, y_icon);
 }
 
 // Draws a hero half (CPU or MEM):
@@ -283,44 +309,12 @@ static void draw_claude() {
 static void draw_footer() {
   gfx.fillRect(0, Y_FOOTER - 14, LCD_W, LCD_H - (Y_FOOTER - 14), 0);
 
-  // Left cluster, left-aligned at PAD_X:
-  //     "<transport> \u00B7 " [battery] "<n>%" [bolt-if-charging]
-  // Same piece that used to live on the top strap — moved down so the top
-  // strap can stay clean with just the static machine specs.
+  // Left: transport tag (USB / BLE). Battery lives on the top strap.
   u8g2.setFont(u8g2_font_ncenR12_tf);
-  const char* tp        = active_transport();
-  bool        has_cell  = batt.pct >= 0;
-  bool        show_bolt = has_cell && charging_hint();
-
-  char prefix[16] = {0};
-  if (tp) snprintf(prefix, sizeof(prefix), "%s  ", tp);
-
-  char pct_txt[8] = {0};
-  if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
-
-  constexpr int GAP       = 4;
-  constexpr int BATT_SLOT = BATT_W + 2 + GAP;   // body + nub + gap
-
-  int ascent = u8g2.getFontAscent();
-  int y_icon = Y_FOOTER - ascent;
-
-  int x = PAD_X;
-  if (prefix[0]) {
-    u8g2.setCursor(x, Y_FOOTER);
-    u8g2.print(prefix);
-    x += u8g2.getUTF8Width(prefix);
-  }
-  if (has_cell) {
-    draw_batt_icon(x, y_icon, batt.pct);
-    x += BATT_SLOT;
-  }
-  if (pct_txt[0]) {
-    u8g2.setCursor(x, Y_FOOTER);
-    u8g2.print(pct_txt);
-    x += u8g2.getUTF8Width(pct_txt);
-  }
-  if (show_bolt) {
-    draw_bolt(x + GAP, y_icon);
+  const char* tp = active_transport();
+  if (tp) {
+    u8g2.setCursor(PAD_X, Y_FOOTER);
+    u8g2.print(tp);
   }
 
   // Right: "last Xs · by mole & xian".
@@ -479,13 +473,13 @@ void loop() {
   }
 
   // Battery tick — 5s. Battery changes slowly; re-reading the ADC this
-  // often is essentially free and keeps the displayed % fresh. The 1 s
-  // footer tick above already redraws the battery cluster, so we only
-  // need to refresh the ADC here (no explicit draw call).
+  // often is essentially free and keeps the displayed % fresh.
   static uint32_t last_batt_ms = 0;
   if (now - last_batt_ms > 5000) {
     last_batt_ms = now;
     update_battery();
+    draw_top_strap();
+    gfx.flush();
   }
 
   // Re-render the footer immediately when BLE (dis)connects so the
