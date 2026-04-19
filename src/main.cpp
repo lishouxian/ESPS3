@@ -130,8 +130,11 @@ static const char* active_transport() {
 static inline bool charging_hint() { return batt.mv > 4150; }
 
 // ── Icons ────────────────────────────────────────────────────────────
+// Sized to the cap height of the strap font (u8g2_font_ncenR12_tf is ~10 px
+// from cap line to baseline) so the icons align with "95" instead of
+// sitting below the digits.
 constexpr int BATT_W = 15;       // body width (terminal nub adds 2 more)
-constexpr int BATT_H = 9;
+constexpr int BATT_H = 10;
 constexpr int BOLT_W = 6;
 constexpr int BOLT_H = 10;
 
@@ -156,9 +159,9 @@ static void draw_bolt(int x, int y) {
 // to say "this is a battery level" — charging state is shown separately.
 static void draw_batt_icon(int x, int y, int pct) {
   gfx.drawRect(x, y, BATT_W, BATT_H, 1);
-  gfx.fillRect(x + BATT_W, y + 3, 2, 3, 1);
-  int inner = BATT_W - 4;
-  int fill  = inner * constrain(pct, 0, 100) / 100;
+  gfx.fillRect(x + BATT_W, y + 3, 2, BATT_H - 6, 1);
+  int inner_w = BATT_W - 4;
+  int fill    = inner_w * constrain(pct, 0, 100) / 100;
   if (fill > 0) gfx.fillRect(x + 2, y + 2, fill, BATT_H - 4, 1);
 }
 
@@ -194,10 +197,13 @@ static void draw_top_strap() {
   int total = prefix_w + icon_w + pct_w + bolt_w;
   if (total == 0) return;
 
-  // Center icons on the text x-height line. ncenR12 sits roughly from
-  // y = baseline-10 (cap) to y = baseline+2 (descender); midline ~ baseline-5.
-  int y_batt = Y_STRAP_BASELINE - 5 - BATT_H / 2;
-  int y_bolt = Y_STRAP_BASELINE - 5 - BOLT_H / 2;
+  // Align icon tops with the cap line of the strap font. u8g2 reports the
+  // ascent for the currently set font; icons are sized to match, so placing
+  // their top edge at (baseline - ascent) lines them up with the caps of
+  // "95%" next to them rather than sitting visibly lower.
+  int ascent = u8g2.getFontAscent();
+  int y_batt = Y_STRAP_BASELINE - ascent;
+  int y_bolt = Y_STRAP_BASELINE - ascent;
 
   int x = LCD_W - PAD_X - total;
   if (prefix[0]) {
