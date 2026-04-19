@@ -23,11 +23,27 @@ constexpr int LCD_H = 300;
 // uses a ~3:1 divider (200k + 100k, typical for 1S-LiPo sense on 3.3V ADC).
 constexpr int   PIN_BATT_ADC = 4;
 constexpr float BATT_DIV     = 3.0f;   // V_bat = V_adc * BATT_DIV
-// Curve is a straight-line approximation of a LiPo/Li-ion discharge.
-constexpr int   BATT_MV_EMPTY = 3300;  // treat as 0%
-constexpr int   BATT_MV_FULL  = 4200;  // treat as 100%
 // Below this we assume the ADC pin is floating (no cell installed).
 constexpr int   BATT_MV_PRESENT = 2500;
+
+// 1S LiPo state-of-charge curve, voltage → %. A linear 3.3–4.2 V mapping
+// looks right on paper but a LiPo actually spends most of its usable life
+// on a roughly flat plateau between 3.7 V and 4.0 V — a linear fit reads
+// systematically low across that whole middle section. The anchors below
+// are picked to follow the published discharge curve (Battery University et
+// al.); between adjacent points we interpolate linearly, which is plenty
+// for a dashboard readout.
+struct BattPoint { int mv; int pct; };
+constexpr BattPoint BATT_CURVE[] = {
+    { 3300,   0 },
+    { 3680,  10 },
+    { 3740,  20 },
+    { 3820,  40 },
+    { 3870,  60 },
+    { 3980,  80 },
+    { 4060,  90 },
+    { 4200, 100 },
+};
 
 DisplayPort          rlcd(PIN_LCD_MOSI, PIN_LCD_SCK, PIN_LCD_DC,
                           PIN_LCD_CS, PIN_LCD_RST, LCD_W, LCD_H);
@@ -105,6 +121,20 @@ static void progress_bar(int x, int y, int w, int h, int pct) {
 }
 
 // ── Battery + transport status ───────────────────────────────────────
+static int batt_pct_from_mv(int mv) {
+  constexpr int N = sizeof(BATT_CURVE) / sizeof(BATT_CURVE[0]);
+  if (mv <= BATT_CURVE[0].mv)      return BATT_CURVE[0].pct;
+  if (mv >= BATT_CURVE[N - 1].mv)  return BATT_CURVE[N - 1].pct;
+  for (int i = 1; i < N; ++i) {
+    const BattPoint& lo = BATT_CURVE[i - 1];
+    const BattPoint& hi = BATT_CURVE[i];
+    if (mv <= hi.mv) {
+      return lo.pct + (mv - lo.mv) * (hi.pct - lo.pct) / (hi.mv - lo.mv);
+    }
+  }
+  return BATT_CURVE[N - 1].pct;   // unreachable
+}
+
 static void update_battery() {
   constexpr int N = 16;  // oversample to knock down ADC noise
   uint32_t sum = 0;
@@ -114,8 +144,7 @@ static void update_battery() {
   batt.mv = vbat;
 
   if (vbat < BATT_MV_PRESENT) { batt.pct = -1; return; }
-  int pct = (vbat - BATT_MV_EMPTY) * 100 / (BATT_MV_FULL - BATT_MV_EMPTY);
-  batt.pct = constrain(pct, 0, 100);
+  batt.pct = batt_pct_from_mv(vbat);
 }
 
 // Pick the winning transport tag. USB gets priority when present because
