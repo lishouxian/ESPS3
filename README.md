@@ -7,6 +7,7 @@ Waveshare **ESP32-S3-RLCD-4.2** 开发板的学习与折腾记录，使用 **Pla
 - [`docs/01-hardware.md`](docs/01-hardware.md) — 硬件规格、引脚速查、板载 IC
 - [`docs/02-platformio-setup.md`](docs/02-platformio-setup.md) — PlatformIO 环境搭建、烧录流程、常见坑
 - [`docs/03-first-flash.md`](docs/03-first-flash.md) — 首次烧录实录（验证工具链 + 串口打印）
+- [`docs/04-display.md`](docs/04-display.md) — 点亮 ST7305 屏幕 + 接入 Adafruit_GFX
 
 ## 快速开始
 
