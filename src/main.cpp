@@ -18,6 +18,17 @@ constexpr int PIN_LCD_RST  = 41;
 constexpr int LCD_W = 400;
 constexpr int LCD_H = 300;
 
+// Battery voltage on ADC1_CH3 (GPIO4), per docs/01-hardware.md. Measured
+// empirically: a full-looking cell reads ~1.4 V at the pin, so the board
+// uses a ~3:1 divider (200k + 100k, typical for 1S-LiPo sense on 3.3V ADC).
+constexpr int   PIN_BATT_ADC = 4;
+constexpr float BATT_DIV     = 3.0f;   // V_bat = V_adc * BATT_DIV
+// Curve is a straight-line approximation of a LiPo/Li-ion discharge.
+constexpr int   BATT_MV_EMPTY = 3300;  // treat as 0%
+constexpr int   BATT_MV_FULL  = 4200;  // treat as 100%
+// Below this we assume the ADC pin is floating (no cell installed).
+constexpr int   BATT_MV_PRESENT = 2500;
+
 DisplayPort          rlcd(PIN_LCD_MOSI, PIN_LCD_SCK, PIN_LCD_DC,
                           PIN_LCD_CS, PIN_LCD_RST, LCD_W, LCD_H);
 RlcdGfx               gfx(rlcd, LCD_W, LCD_H);
@@ -73,14 +84,45 @@ struct Snapshot {
   uint32_t last_update_ms = 0;
 } snap;
 
-// ── Drawing helpers ──────────────────────────────────────────────────
-static inline void hline(int x0, int x1, int y) { gfx.drawLine(x0, y, x1, y, 1); }
+// ── Board-local state (battery, active transport) ────────────────────
+struct Battery {
+  int mv  = -1;   // last reading in millivolts, -1 = never read
+  int pct = -1;   // 0..100, or -1 = not present / unknown
+} batt;
 
+enum class Src { USB, BLE };
+static Src      last_src    = Src::USB;
+static uint32_t last_src_ms = 0;
+
+// ── Drawing helpers ──────────────────────────────────────────────────
 static void progress_bar(int x, int y, int w, int h, int pct) {
   gfx.drawRect(x, y, w, h, 1);
   if (pct < 0) return;
   int fill = (w - 2) * constrain(pct, 0, 100) / 100;
   if (fill > 0) gfx.fillRect(x + 1, y + 1, fill, h - 2, 1);
+}
+
+// ── Battery + transport status ───────────────────────────────────────
+static void update_battery() {
+  constexpr int N = 16;  // oversample to knock down ADC noise
+  uint32_t sum = 0;
+  for (int i = 0; i < N; ++i) sum += analogReadMilliVolts(PIN_BATT_ADC);
+  int adc_mv = sum / N;
+  int vbat   = (int)(adc_mv * BATT_DIV);
+  batt.mv = vbat;
+
+  if (vbat < BATT_MV_PRESENT) { batt.pct = -1; return; }
+  int pct = (vbat - BATT_MV_EMPTY) * 100 / (BATT_MV_FULL - BATT_MV_EMPTY);
+  batt.pct = constrain(pct, 0, 100);
+}
+
+// Name the transport that most recently delivered a data line, or the one
+// currently connected. Returns nullptr when there's nothing to show.
+static const char* active_transport() {
+  uint32_t age = millis() - last_src_ms;
+  if (age < 5000) return (last_src == Src::BLE) ? "BLE" : "USB";
+  if (ble_connected()) return "BLE";
+  return nullptr;
 }
 
 // ── Drawing ──────────────────────────────────────────────────────────
@@ -90,15 +132,22 @@ static void draw_top_strap() {
   u8g2.setFont(u8g2_font_ncenR12_tf);
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
-  if (snap.up[0]) { u8g2.print("  \u00B7  up "); u8g2.print(snap.up); }
 
-  // Right-aligned transport tag — only shows when a BLE central is connected,
-  // so USB-CDC sessions stay visually clean.
-  if (ble_connected()) {
-    const char* tag = "via BLE";
-    int tw = u8g2.getUTF8Width(tag);
-    u8g2.setCursor(LCD_W - PAD_X - tw, Y_STRAP_BASELINE);
-    u8g2.print(tag);
+  // Right cluster: "<transport> \u00B7 <n>%"
+  // Each piece is optional; rendered only when present.
+  char right[48] = {0};
+  const char* tp = active_transport();
+  if (tp && batt.pct >= 0) {
+    snprintf(right, sizeof(right), "%s \u00B7 %d%%", tp, batt.pct);
+  } else if (batt.pct >= 0) {
+    snprintf(right, sizeof(right), "%d%%", batt.pct);
+  } else if (tp) {
+    snprintf(right, sizeof(right), "%s", tp);
+  }
+  if (right[0]) {
+    int rw = u8g2.getUTF8Width(right);
+    u8g2.setCursor(LCD_W - PAD_X - rw, Y_STRAP_BASELINE);
+    u8g2.print(right);
   }
 }
 
@@ -266,7 +315,7 @@ static void handle_shot() {
   Serial.flush();
 }
 
-static void consume_line(const String& line) {
+static void consume_line_impl(const String& line, Src src) {
   if (line == "SHOT") { handle_shot(); return; }
 
   JsonDocument doc;
@@ -275,15 +324,25 @@ static void consume_line(const String& line) {
     Serial.printf("JSON parse error: %s (len=%d)\n", err.c_str(), line.length());
     return;
   }
+  last_src    = src;
+  last_src_ms = millis();
   apply_snapshot(doc);
   render_all();
+}
+
+static void consume_line_from_usb(const String& line) {
+  consume_line_impl(line, Src::USB);
+}
+
+static void consume_line_from_ble(const String& line) {
+  consume_line_impl(line, Src::BLE);
 }
 
 static void pump_serial() {
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {
-      if (rx_buf.length() > 0) consume_line(rx_buf);
+      if (rx_buf.length() > 0) consume_line_from_usb(rx_buf);
       rx_buf = "";
     } else if (c != '\r') {
       if (rx_buf.length() < 4096) rx_buf += c;
@@ -306,11 +365,15 @@ void setup() {
   u8g2.setBackgroundColor(0);
   u8g2.setFontDirection(0);
 
+  // Prime the battery reading so the strap comes up with a real number.
+  analogReadResolution(12);  // default but make it explicit
+  update_battery();
+
   render_all();
 
   // Bring up BLE last — splash is already on screen, and ble_begin() takes
   // a few hundred ms for NimBLE stack init.
-  ble_begin(consume_line);
+  ble_begin(consume_line_from_ble);
   Serial.printf("[ESPS3] BLE up as \"%s\"\n", ble_advertised_name());
 
   Serial.println("[ESPS3] ready, awaiting JSON on stdin");
@@ -320,17 +383,28 @@ void loop() {
   pump_serial();
   ble_poll();
 
-  // Refresh the "last Xs ..." footer once per second so it stays live even
-  // between incoming frames.
+  uint32_t now = millis();
+
+  // Footer "last Xs ..." tick — once per second.
   static uint32_t last_footer_ms = 0;
-  if (millis() - last_footer_ms > 1000) {
-    last_footer_ms = millis();
+  if (now - last_footer_ms > 1000) {
+    last_footer_ms = now;
     draw_footer();
     gfx.flush();
   }
 
-  // Re-render the strap when BLE (dis)connects so the "via BLE" tag appears
-  // / disappears without waiting for a data frame.
+  // Battery + strap tick — 5s. Battery changes slowly; re-reading the ADC
+  // this often is essentially free and keeps the displayed % fresh.
+  static uint32_t last_batt_ms = 0;
+  if (now - last_batt_ms > 5000) {
+    last_batt_ms = now;
+    update_battery();
+    draw_top_strap();
+    gfx.flush();
+  }
+
+  // Re-render the strap immediately when BLE (dis)connects so the transport
+  // tag flips without waiting for the 5s tick.
   static bool last_ble = false;
   bool now_ble = ble_connected();
   if (now_ble != last_ble) {

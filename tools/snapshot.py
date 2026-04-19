@@ -116,10 +116,16 @@ def read_claude_cache() -> dict | None:
 
 
 def compact_hw(hw: dict) -> str:
-    bits = []
-    if hw.get("model"):     bits.append(hw["model"])
-    if hw.get("cpu_model"): bits.append(hw["cpu_model"])
-    if hw.get("total_ram"): bits.append(hw["total_ram"].replace(" ", ""))
+    """Compact form for the top strap: 'Mac mini \u00B7 M4 \u00B7 32GB'."""
+    bits: list[str] = []
+    if hw.get("model"):
+        bits.append(hw["model"])
+    cpu = (hw.get("cpu_model") or "").replace("Apple ", "")
+    if cpu:
+        bits.append(cpu)
+    ram = (hw.get("total_ram") or "").replace(" ", "").replace(".0", "")
+    if ram:
+        bits.append(ram)
     return " \u00B7 ".join(bits)
 
 
