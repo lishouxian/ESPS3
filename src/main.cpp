@@ -130,36 +130,36 @@ static const char* active_transport() {
 static inline bool charging_hint() { return batt.mv > 4150; }
 
 // ── Icons ────────────────────────────────────────────────────────────
-// Small zigzag bolt, 4 wide × 7 tall. Drawn in `color` so it can appear
-// either as black ink on white paper, or punched through a filled battery
-// body (color 0 = erase).
-static void draw_bolt(int x, int y, int color) {
-  gfx.drawLine(x+2, y+0, x+3, y+0, color);
-  gfx.drawLine(x+1, y+1, x+3, y+1, color);
-  gfx.drawLine(x+0, y+2, x+3, y+2, color);
-  gfx.drawLine(x+0, y+3, x+2, y+3, color);
-  gfx.drawLine(x+1, y+4, x+3, y+4, color);
-  gfx.drawLine(x+0, y+5, x+2, y+5, color);
-  gfx.drawPixel(x+0, y+6, color);
+constexpr int BATT_W = 15;       // body width (terminal nub adds 2 more)
+constexpr int BATT_H = 9;
+constexpr int BOLT_W = 6;
+constexpr int BOLT_H = 10;
+
+// Zigzag lightning — two triangle halves offset at the waist. 6w × 10h,
+// big enough to register as "bolt" on a 1-bit 400×300 display.
+static void draw_bolt(int x, int y) {
+  // Upper half: filled triangle tip (x+5,y) down to base (x..x+4, y+4).
+  gfx.drawLine(x+4, y+0, x+5, y+0, 1);
+  gfx.drawLine(x+3, y+1, x+5, y+1, 1);
+  gfx.drawLine(x+2, y+2, x+5, y+2, 1);
+  gfx.drawLine(x+1, y+3, x+5, y+3, 1);
+  gfx.drawLine(x+0, y+4, x+4, y+4, 1);
+  // Lower half: shifted right by 1 pixel so the waist zig-zags.
+  gfx.drawLine(x+1, y+5, x+5, y+5, 1);
+  gfx.drawLine(x+0, y+6, x+3, y+6, 1);
+  gfx.drawLine(x+0, y+7, x+2, y+7, 1);
+  gfx.drawLine(x+0, y+8, x+1, y+8, 1);
+  gfx.drawPixel(x+0, y+9, 1);
 }
 
-// iOS-style battery pill: 15 × 9 body, 2 × 3 terminal nub (total 17 wide).
-// Charging → solid black fill with a white bolt punched through, same
-// idiom as macOS / iOS so it reads instantly.
-static void draw_batt_icon(int x, int y, int pct, bool charging) {
-  constexpr int BW = 15, BH = 9;
-  gfx.drawRect(x, y, BW, BH, 1);
-  gfx.fillRect(x + BW, y + 3, 2, 3, 1);
-
-  if (charging) {
-    gfx.fillRect(x + 1, y + 1, BW - 2, BH - 2, 1);
-    // Bolt nicely centered inside the body.
-    draw_bolt(x + (BW - 4) / 2, y + 1, 0);
-  } else {
-    int inner = BW - 4;
-    int fill  = inner * constrain(pct, 0, 100) / 100;
-    if (fill > 0) gfx.fillRect(x + 2, y + 2, fill, BH - 4, 1);
-  }
+// Battery pill: body + terminal nub, proportionally filled. Job is only
+// to say "this is a battery level" — charging state is shown separately.
+static void draw_batt_icon(int x, int y, int pct) {
+  gfx.drawRect(x, y, BATT_W, BATT_H, 1);
+  gfx.fillRect(x + BATT_W, y + 3, 2, 3, 1);
+  int inner = BATT_W - 4;
+  int fill  = inner * constrain(pct, 0, 100) / 100;
+  if (fill > 0) gfx.fillRect(x + 2, y + 2, fill, BATT_H - 4, 1);
 }
 
 // ── Drawing ──────────────────────────────────────────────────────────
@@ -170,12 +170,12 @@ static void draw_top_strap() {
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
 
-  // Right cluster: right-aligned. Compose
-  //     "<transport> \u00B7 " [battery-icon] "<n>%"
-  // The bolt lives *inside* the battery when charging (iOS idiom), so
-  // there's no separate lightning glyph competing for horizontal space.
-  const char* tp       = active_transport();
-  bool        has_cell = batt.pct >= 0;
+  // Right cluster, right-aligned:
+  //     "<transport> \u00B7 " [battery] "<n>%" [bolt-if-charging]
+  // Icons sit visually centered on the text cap row (y ~= baseline - 5).
+  const char* tp        = active_transport();
+  bool        has_cell  = batt.pct >= 0;
+  bool        show_bolt = has_cell && charging_hint();
 
   char prefix[16] = {0};
   if (tp) snprintf(prefix, sizeof(prefix), "%s \u00B7 ", tp);
@@ -183,15 +183,21 @@ static void draw_top_strap() {
   char pct_txt[8] = {0};
   if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
 
-  constexpr int BATT_W = 17;  // 15 body + 2 terminal nub
-  constexpr int GAP    = 4;
+  constexpr int GAP       = 4;
+  constexpr int BATT_SLOT = BATT_W + 2 + GAP;   // body + nub + gap
 
   int prefix_w = prefix[0]  ? u8g2.getUTF8Width(prefix)  : 0;
   int pct_w    = pct_txt[0] ? u8g2.getUTF8Width(pct_txt) : 0;
-  int icon_w   = has_cell   ? BATT_W + GAP               : 0;
+  int icon_w   = has_cell   ? BATT_SLOT                  : 0;
+  int bolt_w   = show_bolt  ? GAP + BOLT_W               : 0;
 
-  int total = prefix_w + icon_w + pct_w;
+  int total = prefix_w + icon_w + pct_w + bolt_w;
   if (total == 0) return;
+
+  // Center icons on the text x-height line. ncenR12 sits roughly from
+  // y = baseline-10 (cap) to y = baseline+2 (descender); midline ~ baseline-5.
+  int y_batt = Y_STRAP_BASELINE - 5 - BATT_H / 2;
+  int y_bolt = Y_STRAP_BASELINE - 5 - BOLT_H / 2;
 
   int x = LCD_W - PAD_X - total;
   if (prefix[0]) {
@@ -200,12 +206,16 @@ static void draw_top_strap() {
     x += prefix_w;
   }
   if (has_cell) {
-    draw_batt_icon(x, Y_STRAP_BASELINE - 12, batt.pct, charging_hint());
+    draw_batt_icon(x, y_batt, batt.pct);
     x += icon_w;
   }
   if (pct_txt[0]) {
     u8g2.setCursor(x, Y_STRAP_BASELINE);
     u8g2.print(pct_txt);
+    x += pct_w;
+  }
+  if (show_bolt) {
+    draw_bolt(x + GAP, y_bolt);
   }
 }
 
