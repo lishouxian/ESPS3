@@ -181,7 +181,7 @@ static void draw_top_strap() {
   bool        show_bolt = has_cell && charging_hint();
 
   char prefix[16] = {0};
-  if (tp) snprintf(prefix, sizeof(prefix), "%s \u00B7 ", tp);
+  if (tp) snprintf(prefix, sizeof(prefix), "%s  ", tp);
 
   char pct_txt[8] = {0};
   if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
