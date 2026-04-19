@@ -487,9 +487,9 @@ void loop() {
     gfx.flush();
   }
 
-  // Yield to the FreeRTOS IDLE task. Without this the loop busy-waits at
-  // full clock; with it, esp_pm (enabled separately) can drop into light
-  // sleep during these windows. 20 ms is short enough that USB serial
-  // ingest and BLE poll responsiveness don't visibly suffer.
+  // Yield to the FreeRTOS IDLE task so the CPU isn't busy-looping. Deeper
+  // power management (esp_pm auto-light-sleep) would go here but Arduino-
+  // ESP32 ships with CONFIG_PM_ENABLE=off; enabling it needs a custom IDF
+  // build, which is out of scope for this project.
   delay(20);
 }
