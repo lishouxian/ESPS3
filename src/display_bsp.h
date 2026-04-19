@@ -24,6 +24,12 @@ class DisplayPort {
   void RLCD_Display();
   void RLCD_SetPixel(uint16_t x, uint16_t y, uint8_t color);  // landscape
 
+  // Raw framebuffer read-access for SHOT protocol.
+  const uint8_t* buffer() const { return disp_buffer_; }
+  int            buffer_len() const { return disp_len_; }
+  int            width() const { return width_; }
+  int            height() const { return height_; }
+
  private:
   void RLCD_Reset();
   void RLCD_SendCommand(uint8_t reg);

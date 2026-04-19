@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ESPS3 · Design Directions (actual 400×300)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,500;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&family=Archivo+Narrow:wght@400;500;600;700&family=Major+Mono+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #000;
+    --paper: #ffffff;
+    --paper-tint: #e8e3d4;   /* reflective LCD look */
+    --bg-dark: #1a1a1a;
+    --stroke: #000;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-dark); color: #ddd; font-family: system-ui, -apple-system, sans-serif; }
+  body { padding: 40px 40px 80px; }
+
+  h1 { font-weight: 700; margin: 0 0 6px; font-size: 24px; letter-spacing: -0.01em; }
+  .sub { color: #888; max-width: 720px; line-height: 1.55; font-size: 14px; }
+  .sub code { background: #2a2a2a; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  .toggle-row { margin: 24px 0 32px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .toggle-row button { background: #333; color: #ddd; border: 1px solid #555; padding: 6px 12px; cursor: pointer; font-family: inherit; font-size: 13px; }
+  .toggle-row button:hover { background: #444; }
+  .toggle-row span { color: #777; font-size: 12px; }
+
+  .stage { display: flex; flex-direction: column; gap: 48px; align-items: flex-start; }
+  .card { background: #141414; border: 1px solid #2a2a2a; padding: 24px; }
+  .card h2 { margin: 0 0 2px; font-size: 18px; font-weight: 700; }
+  .card .tag { color: #8a8a8a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 16px; }
+  .card .notes { color: #9b9b9b; font-size: 13px; line-height: 1.55; margin-top: 16px; max-width: 820px; }
+  .card .notes b { color: #d4d4d4; font-weight: 600; }
+
+  /* ─────────────── DISPLAY STAGING ───────────────
+     Each .display is EXACTLY 400×300 real pixels.
+     We wrap it in .display-frame which scales the display 2× for legibility,
+     so the numeric density on your screen matches what the board will show. */
+  .display-frame {
+    background: #0a0a0a;
+    padding: 12px;
+    display: inline-block;
+    width: 824px;          /* 400*2 + 2*12 */
+    height: 624px;
+  }
+  .display-scale { transform: scale(2); transform-origin: top left; width: 400px; height: 300px; }
+  .display {
+    width: 400px;
+    height: 300px;
+    background: var(--paper);
+    color: var(--ink);
+    position: relative;
+    overflow: hidden;
+    font-kerning: none;
+    -webkit-font-smoothing: none;
+  }
+  body.warm .display { background: var(--paper-tint); }
+
+  /* ─────────────── DIRECTION A: INK ON PAPER ───────────────
+     True-to-pixel typography. Targets a compact newspaper card.
+     Font sizes chosen to match equivalent u8g2 bitmap fonts at 1:1 pixels. */
+  .ink { font-family: "EB Garamond", Georgia, serif; color: #000; }
+
+  .ink .masthead {
+    position: absolute; left: 10px; right: 10px; top: 8px;
+    font-family: "Archivo Narrow", sans-serif;
+    font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.22em;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .ink .r1 { position: absolute; left: 10px; right: 10px; top: 26px; border-top: 1px solid #000; border-bottom: 1px solid #000; height: 3px; }
+  .ink .strap {
+    position: absolute; left: 10px; right: 10px; top: 34px;
+    font-family: "EB Garamond", serif; font-style: italic;
+    font-size: 12px; line-height: 1.2;
+  }
+
+  .ink .cols { position: absolute; left: 10px; right: 10px; top: 54px; display: flex; gap: 20px; }
+  .ink .col { flex: 1; }
+  .ink .label {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.22em;
+  }
+  .ink .big {
+    font-family: "EB Garamond", serif; font-weight: 700;
+    font-size: 54px; line-height: 0.95; margin-top: -2px;
+    letter-spacing: -0.04em;
+  }
+  .ink .big sup { font-size: 22px; font-weight: 500; position: relative; top: -20px; left: 3px; letter-spacing: 0; }
+  .ink .thin-rule { border-top: 1px solid #000; margin: 2px 0 3px; }
+  .ink .meta {
+    font-family: "EB Garamond", serif; font-style: italic;
+    font-size: 12px; line-height: 1.2;
+  }
+
+  .ink .net {
+    position: absolute; left: 10px; right: 10px; top: 144px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .ink .net .half { font-family: "EB Garamond", serif; font-size: 16px; font-weight: 600; }
+  .ink .net .half .l {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.22em;
+    margin-right: 5px;
+  }
+  .ink .spark {
+    position: absolute; left: 10px; right: 10px; top: 164px;
+    font-family: "IBM Plex Mono", monospace; font-size: 8px; line-height: 1;
+    letter-spacing: 0; color: #000;
+  }
+
+  /* CLAUDE block in Ink style */
+  .ink .claude { position: absolute; left: 10px; right: 10px; top: 188px; }
+  .ink .claude h3 {
+    margin: 0 0 3px; font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.22em;
+  }
+  .ink .claude .row { display: flex; align-items: baseline; gap: 6px; font-family: "EB Garamond", serif; font-size: 12px; line-height: 1.25; border-bottom: 1px dotted #777; padding: 1px 0; }
+  .ink .claude .k { font-style: italic; min-width: 42px; }
+  .ink .claude .v { font-weight: 700; min-width: 32px; text-align: right; }
+  .ink .claude .bar { flex: 1; display: flex; align-items: center; }
+  .ink .claude .bar-inner { flex: 1; height: 4px; border: 1px solid #000; position: relative; }
+  .ink .claude .bar-inner i { display: block; height: 100%; background: #000; }
+  .ink .claude .reset { font-style: italic; color: #444; font-size: 10px; min-width: 54px; text-align: right; }
+
+  .ink .foot {
+    position: absolute; left: 10px; right: 10px; top: 284px;
+    font-family: "Archivo Narrow", sans-serif; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.2em;
+    display: flex; justify-content: space-between;
+  }
+  .ink .foot em { font-family: "EB Garamond", serif; font-style: italic; text-transform: none; letter-spacing: 0; font-size: 10px; }
+  .ink .rfoot { position: absolute; left: 10px; right: 10px; top: 276px; border-top: 1px solid #000; }
+
+
+  /* ─────────────── DIRECTION B: BRAUN INSTRUMENT ─────────────── */
+  .braun { color: #000; }
+  .braun .head { position: absolute; left: 0; right: 0; top: 10px; text-align: center; }
+  .braun .head .hn {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 700;
+    font-size: 20px; letter-spacing: 0.08em;
+  }
+  .braun .head .hw {
+    font-family: "Inter", sans-serif; font-weight: 400;
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: #222; margin-top: 4px;
+  }
+  .braun .health {
+    position: absolute; right: 14px; top: 14px;
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+  }
+
+  .braun .cols { position: absolute; left: 0; right: 0; top: 60px; display: flex; }
+  .braun .col { flex: 1; text-align: center; }
+  .braun .lbl {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+  }
+  .braun .num {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 700;
+    font-size: 56px; line-height: 1; margin-top: 2px; letter-spacing: -0.03em;
+  }
+  .braun .num small {
+    font-size: 24px; font-weight: 500; color: #444; letter-spacing: 0;
+  }
+  .braun .ticks {
+    width: 140px; margin: 4px auto 0; height: 3px; border-top: 1px solid #000; position: relative;
+  }
+  .braun .ticks::before, .braun .ticks::after,
+  .braun .ticks i { content: ''; position: absolute; width: 1px; background: #000; top: -1px; }
+  .braun .ticks::before { left: 0; height: 4px; }
+  .braun .ticks::after { right: 0; height: 4px; }
+  .braun .ticks i { left: 50%; height: 3px; }
+  .braun .ticks i.q1 { left: 25%; height: 2px; }
+  .braun .ticks i.q3 { left: 75%; height: 2px; }
+  .braun .meta {
+    margin-top: 5px; font-family: "Inter", sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  }
+
+  .braun .net {
+    position: absolute; left: 0; right: 0; top: 154px; text-align: center;
+  }
+  .braun .net .row {
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 13px; letter-spacing: 0.1em;
+  }
+  .braun .net .row .sep { display: inline-block; width: 20px; }
+  .braun .spark {
+    margin-top: 3px; font-family: "IBM Plex Mono", monospace; font-size: 7px;
+    letter-spacing: 0; color: #000; line-height: 1;
+  }
+
+  /* CLAUDE block in Braun style */
+  .braun .claude { position: absolute; left: 14px; right: 14px; top: 194px; }
+  .braun .claude .r {
+    display: grid; grid-template-columns: 42px 42px 1fr 54px;
+    align-items: center; gap: 6px;
+    font-family: "Archivo Narrow", sans-serif; font-weight: 600;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 3px 0;
+    border-bottom: 1px solid #000;
+  }
+  .braun .claude .r:last-child { border-bottom: none; }
+  .braun .claude .v { text-align: right; letter-spacing: 0; }
+  .braun .claude .bar { display: flex; height: 4px; }
+  .braun .claude .bar-inner { flex: 1; height: 4px; border: 1px solid #000; }
+  .braun .claude .bar-inner i { display: block; height: 100%; background: #000; }
+  .braun .claude .rst { text-align: right; font-family: "Inter", sans-serif; font-weight: 400; font-size: 9px; letter-spacing: 0.08em; text-transform: none; color: #222; }
+
+  .braun .foot {
+    position: absolute; left: 14px; right: 14px; bottom: 8px;
+    display: flex; justify-content: space-between;
+    font-family: "Inter", sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  }
+
+
+  /* ─────────────── DIRECTION C: TERMINAL BRUTALIST ─────────────── */
+  .term {
+    font-family: "IBM Plex Mono", "Menlo", monospace;
+    font-weight: 400; font-size: 10px; line-height: 1.25;
+    padding: 6px 7px; color: #000;
+    letter-spacing: 0;
+  }
+  .term pre { margin: 0; font: inherit; white-space: pre; }
+  .term .b { font-weight: 700; }
+  .term .muted { color: #555; }
+
+  .hint {
+    color: #666; font-size: 12px; text-align: center; margin-top: 28px;
+    font-family: "IBM Plex Mono", monospace;
+  }
+</style>
+</head>
+<body>
+
+<h1>ESPS3 · Design Directions <span style="color:#777;font-weight:400;font-size:18px;">· actual 400×300, viewed 2× for legibility</span></h1>
+<p class="sub">
+  This render is <b>pixel-accurate to the real display</b>: the <code>.display</code> div is 400×300
+  real px, scaled by <code>transform: scale(2)</code>. Font sizes are picked to approximate the
+  u8g2 bitmap fonts we'd use on the board at the same pixel height (Logisoso 32/34 for hero,
+  helvetica 10–14 for body). So the <b>density you see here is roughly what you'll see on the
+  board</b>—it's a smaller, denser screen than the first mockup suggested.
+</p>
+
+<div class="toggle-row">
+  <button onclick="document.body.classList.toggle('warm')">toggle reflective-paper tint</button>
+  <span>the real screen is slightly warm off-white, not pure paper white</span>
+</div>
+
+<div class="stage">
+
+  <!-- ═══════ 🅐 INK ON PAPER ═══════ -->
+  <div class="card">
+    <div class="tag">Direction A</div>
+    <h2>Ink on Paper</h2>
+    <div class="display-frame"><div class="display-scale"><div class="display ink">
+      <div class="masthead">
+        <span>MACMINI-2 · STATUS</span>
+        <span>HEALTH 93</span>
+      </div>
+      <div class="r1"></div>
+      <div class="strap">Mac mini · Apple M4 · 32 GB · up 8d 11h</div>
+
+      <div class="cols">
+        <div class="col">
+          <div class="label">CPU Load</div>
+          <div class="big">29<sup>%</sup></div>
+          <div class="thin-rule"></div>
+          <div class="meta">p4 · e6 &nbsp;·&nbsp; load 1.93</div>
+        </div>
+        <div class="col">
+          <div class="label">Memory</div>
+          <div class="big">63<sup>%</sup></div>
+          <div class="thin-rule"></div>
+          <div class="meta">20.0 / 32.0 GB</div>
+        </div>
+      </div>
+
+      <div class="net">
+        <div class="half"><span class="l">Down</span>0.38 MB/s</div>
+        <div class="half"><span class="l">Up</span>1.02 MB/s</div>
+      </div>
+      <div class="spark">▁▁▂▃▅▇█▇▅▃▂▁▁▂▃▄▅▅▃▂▁▁▂▃▄▅▅▃▂▁▂▃▃▄▅▅▆█▇▅▃▂▁</div>
+
+      <div class="claude">
+        <h3>Claude Session</h3>
+        <div class="row">
+          <span class="k">Context</span>
+          <span class="v">23%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:23%"></i></span></span>
+          <span class="reset">—</span>
+        </div>
+        <div class="row">
+          <span class="k">5 h</span>
+          <span class="v">42%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:42%"></i></span></span>
+          <span class="reset">4h 23m</span>
+        </div>
+        <div class="row">
+          <span class="k">7 d</span>
+          <span class="v">18%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:18%"></i></span></span>
+          <span class="reset">5d 12h</span>
+        </div>
+      </div>
+
+      <div class="rfoot"></div>
+      <div class="foot">
+        <span>Disk 146 / 228 GB</span>
+        <em>last 1s · by mole &amp; xian</em>
+      </div>
+    </div></div></div>
+    <div class="notes">
+      <b>Typography</b>: EB Garamond (similar to what u8g2 <code>ncenB18</code> looks like) for serif numerals, Archivo Narrow small-caps for labels, italic for supporting data. <b>Feel</b>: a quiet printed card on your desk, re-pressed every 2 seconds. <b>Memorable element</b>: the MASTHEAD up top — this object looks like a daily bulletin, not a gadget readout. <b>Claude section</b>: treated like a nested briefing ("Claude Session" italic subhead) — Context / 5h / 7d each on their own dotted rule.
+    </div>
+  </div>
+
+  <!-- ═══════ 🅑 BRAUN ═══════ -->
+  <div class="card">
+    <div class="tag">Direction B</div>
+    <h2>Braun Instrument</h2>
+    <div class="display-frame"><div class="display-scale"><div class="display braun">
+      <div class="head">
+        <div class="hn">MACMINI-2</div>
+        <div class="hw">Mac mini &nbsp;·&nbsp; Apple M4 &nbsp;·&nbsp; 32 GB &nbsp;·&nbsp; 8d 11h</div>
+      </div>
+      <div class="health">Health 93</div>
+
+      <div class="cols">
+        <div class="col">
+          <div class="lbl">CPU LOAD</div>
+          <div class="num">29<small>%</small></div>
+          <div class="ticks"><i class="q1"></i><i></i><i class="q3"></i></div>
+          <div class="meta">p4 · e6 &nbsp; load 1.93</div>
+        </div>
+        <div class="col">
+          <div class="lbl">MEMORY</div>
+          <div class="num">63<small>%</small></div>
+          <div class="ticks"><i class="q1"></i><i></i><i class="q3"></i></div>
+          <div class="meta">20.0 · 32.0 GB</div>
+        </div>
+      </div>
+
+      <div class="net">
+        <div class="row">↓&nbsp;0.38 MB/s<span class="sep"></span>↑&nbsp;1.02 MB/s</div>
+        <div class="spark">▁▁▂▃▅▇█▇▅▃▂▁▁▂▃▄▅▅▃▂▁▁▂▃▄▅▅▃▂▁▂▃▃▄▅▅▆█▇▅▃▂▁</div>
+      </div>
+
+      <div class="claude">
+        <div class="r">
+          <span>CTX</span><span class="v">23%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:23%"></i></span></span>
+          <span class="rst">—</span>
+        </div>
+        <div class="r">
+          <span>5H</span><span class="v">42%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:42%"></i></span></span>
+          <span class="rst">resets 4h23m</span>
+        </div>
+        <div class="r">
+          <span>7D</span><span class="v">18%</span>
+          <span class="bar"><span class="bar-inner"><i style="width:18%"></i></span></span>
+          <span class="rst">resets 5d12h</span>
+        </div>
+      </div>
+
+      <div class="foot">
+        <span>DISK 146 / 228</span>
+        <span>LAST 1s · MOLE &amp; XIAN</span>
+      </div>
+    </div></div></div>
+    <div class="notes">
+      <b>Typography</b>: Archivo Narrow everywhere for that condensed Braun/Helvetica-Compressed feel. Uppercase labels, mono-tracked. <b>Feel</b>: centered, symmetric, rational — a dedicated instrument, not a general-purpose screen. <b>Memorable element</b>: the tick marks under each big number (0·25·50·75·100) — numbers sit on a measured scale like an analog meter. <b>Claude section</b>: three flat rows with uppercase keys (CTX / 5H / 7D), bars flush right, reset time explicit.
+    </div>
+  </div>
+
+  <!-- ═══════ 🅒 TERMINAL BRUTALIST ═══════ -->
+  <div class="card">
+    <div class="tag">Direction C</div>
+    <h2>Terminal Brutalist</h2>
+    <div class="display-frame"><div class="display-scale"><div class="display term">
+<pre><span class="b">╭─ MACMINI-2 ──────────────────── HEALTH 93 ──╮</span>
+<span class="b">│</span> Mac mini · Apple M4 · 32GB · up 8d 11h      <span class="b">│</span>
+<span class="b">├─ CPU ────────────────┬─ MEM ────────────────┤</span>
+<span class="b">│</span> <span class="b">29%</span> [██████░░░░░░░]  <span class="b">│</span> <span class="b">63%</span> [█████████░░░]  <span class="b">│</span>
+<span class="b">│</span> p4 e6  ld 1.93       <span class="b">│</span> 20.0 / 32.0 GB       <span class="b">│</span>
+<span class="b">├─ NET ────────────────┴──────────────────────┤</span>
+<span class="b">│</span> ↓ 0.38 MB/s   ↑ 1.02 MB/s                   <span class="b">│</span>
+<span class="b">│</span> <span class="muted">▁▁▂▃▅▇█▇▅▃▂▁▁▂▃▄▅▅▃▂▁▁▂▃▄▅▅▃▂▁▂▃▃▄▅▅▆█▇▅▃</span>   <span class="b">│</span>
+<span class="b">├─ CLAUDE ────────────────────────────────────┤</span>
+<span class="b">│</span> ctx <span class="b">23%</span> [████░░░░░░░░░░░░░]              <span class="b">│</span>
+<span class="b">│</span> 5h  <span class="b">42%</span> [████████░░░░░░░░░]  <span class="muted">4h23m</span>        <span class="b">│</span>
+<span class="b">│</span> 7d  <span class="b">18%</span> [███░░░░░░░░░░░░░░]  <span class="muted">5d12h</span>        <span class="b">│</span>
+<span class="b">├─ DISK ──────────────────────────────────────┤</span>
+<span class="b">│</span> 146/228 GB [████████████░░░░░]    last 1s   <span class="b">│</span>
+<span class="b">╰──────────────────────────── by mole & xian ─╯</span></pre>
+    </div></div></div>
+    <div class="notes">
+      <b>Typography</b>: IBM Plex Mono throughout, one font, one weight for body, bold for frame/key numbers. <b>Feel</b>: a hand-tuned htop / tmux status. Dense, zero ornament, 6-px grid. <b>Memorable element</b>: ASCII box drawing frame — instantly legible as a hacker tool. <b>Claude section</b>: fits naturally as its own <code>├─ CLAUDE ─┤</code> block; ctx/5h/7d lines match the overall visual grammar of every other block on screen.
+    </div>
+  </div>
+
+</div>
+
+<p class="hint">file: mockups/design-directions.html &nbsp;·&nbsp; refresh after edits</p>
+
+</body>
+</html>
