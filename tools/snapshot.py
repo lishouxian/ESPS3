@@ -115,8 +115,8 @@ def read_claude_cache() -> dict | None:
     }
 
 
-def compact_hw(hw: dict) -> str:
-    """Compact form for the top strap: 'Mac mini \u00B7 M4 \u00B7 32GB'."""
+def compact_hw(hw: dict, dsk: dict | None = None) -> str:
+    """Top-strap spec line: 'Mac mini \u00B7 M4 \u00B7 32GB \u00B7 228GB'."""
     bits: list[str] = []
     if hw.get("model"):
         bits.append(hw["model"])
@@ -126,6 +126,10 @@ def compact_hw(hw: dict) -> str:
     ram = (hw.get("total_ram") or "").replace(" ", "").replace(".0", "")
     if ram:
         bits.append(ram)
+    if dsk:
+        total_bytes = dsk.get("total") or 0
+        if total_bytes > 0:
+            bits.append(f"{round(total_bytes / 1024**3)}GB")
     return " \u00B7 ".join(bits)
 
 
@@ -174,7 +178,7 @@ class FrameBuilder:
 
         return {
             "host":   shorten_host(m.get("host", "")),
-            "hw":     compact_hw(hw),
+            "hw":     compact_hw(hw, dsk),
             "up":     m.get("uptime", ""),
             "health": int(m.get("health_score", -1)),
             "cpu": {

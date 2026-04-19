@@ -334,18 +334,8 @@ static void draw_claude() {
 static void draw_footer() {
   gfx.fillRect(0, Y_FOOTER - 14, LCD_W, LCD_H - (Y_FOOTER - 14), 0);
 
-  // Left: DISK <used> / <total> GB — no bar, just the numbers, no rule above.
-  u8g2.setFont(u8g2_font_helvB12_tf);
-  u8g2.setCursor(PAD_X, Y_FOOTER);
-  u8g2.print("DISK");
-
-  u8g2.setFont(u8g2_font_ncenR12_tf);
-  char dbuf[32];
-  snprintf(dbuf, sizeof(dbuf), "%.0f / %.0f GB", snap.disk_used, snap.disk_tot);
-  u8g2.setCursor(PAD_X + 44, Y_FOOTER);
-  u8g2.print(dbuf);
-
-  // Right: "last Xs · by mole & xian"
+  // Right: "last Xs · by mole & xian". Disk total now lives on the top
+  // strap alongside the other static machine specs.
   u8g2.setFont(u8g2_font_ncenR12_tf);
   char buf[64];
   if (snap.last_update_ms == 0)
