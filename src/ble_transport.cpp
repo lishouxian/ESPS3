@@ -22,8 +22,18 @@ String                g_line_buf;
 StreamBufferHandle_t  g_rx_stream = nullptr;
 
 class ServerCb : public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer*, NimBLEConnInfo&) override {
+  void onConnect(NimBLEServer* server, NimBLEConnInfo& info) override {
     g_connected = true;
+    // Coax the central into a slow connection interval. The dashboard only
+    // pushes a frame every 2 s, so 300–600 ms between connection events is
+    // imperceptible to the user but lets the radio sleep much longer per
+    // cycle. Supervision timeout = 4 s (well above the ~1.2 s minimum for
+    // max_interval=480, latency=0).
+    server->updateConnParams(info.getConnHandle(),
+                             240,   // min interval = 300 ms (1.25 ms units)
+                             480,   // max interval = 600 ms
+                             0,     // slave latency
+                             400);  // supervision timeout = 4 s (10 ms units)
   }
   void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
     g_connected = false;

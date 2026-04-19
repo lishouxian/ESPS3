@@ -486,4 +486,10 @@ void loop() {
     draw_top_strap();
     gfx.flush();
   }
+
+  // Yield to the FreeRTOS IDLE task. Without this the loop busy-waits at
+  // full clock; with it, esp_pm (enabled separately) can drop into light
+  // sleep during these windows. 20 ms is short enough that USB serial
+  // ingest and BLE poll responsiveness don't visibly suffer.
+  delay(20);
 }
