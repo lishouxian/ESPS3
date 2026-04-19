@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <U8g2_for_Adafruit_GFX.h>
 
+#include "ble_transport.h"
 #include "display_bsp.h"
 #include "rlcd_gfx.h"
 
@@ -90,6 +91,15 @@ static void draw_top_strap() {
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
   if (snap.up[0]) { u8g2.print("  \u00B7  up "); u8g2.print(snap.up); }
+
+  // Right-aligned transport tag — only shows when a BLE central is connected,
+  // so USB-CDC sessions stay visually clean.
+  if (ble_connected()) {
+    const char* tag = "via BLE";
+    int tw = u8g2.getUTF8Width(tag);
+    u8g2.setCursor(LCD_W - PAD_X - tw, Y_STRAP_BASELINE);
+    u8g2.print(tag);
+  }
 }
 
 // Draws a hero half (CPU or MEM):
@@ -297,15 +307,35 @@ void setup() {
   u8g2.setFontDirection(0);
 
   render_all();
+
+  // Bring up BLE last — splash is already on screen, and ble_begin() takes
+  // a few hundred ms for NimBLE stack init.
+  ble_begin(consume_line);
+  Serial.printf("[ESPS3] BLE up as \"%s\"\n", ble_advertised_name());
+
   Serial.println("[ESPS3] ready, awaiting JSON on stdin");
 }
 
 void loop() {
   pump_serial();
+  ble_poll();
+
+  // Refresh the "last Xs ..." footer once per second so it stays live even
+  // between incoming frames.
   static uint32_t last_footer_ms = 0;
   if (millis() - last_footer_ms > 1000) {
     last_footer_ms = millis();
     draw_footer();
+    gfx.flush();
+  }
+
+  // Re-render the strap when BLE (dis)connects so the "via BLE" tag appears
+  // / disappears without waiting for a data frame.
+  static bool last_ble = false;
+  bool now_ble = ble_connected();
+  if (now_ble != last_ble) {
+    last_ble = now_ble;
+    draw_top_strap();
     gfx.flush();
   }
 }
