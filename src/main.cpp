@@ -25,32 +25,24 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 // ── Layout (y = baseline for u8g2 text, unless noted) ────────────────
 constexpr int PAD_X                    = 10;
 
-// Top strap
-constexpr int Y_STRAP_BASELINE         = 14;
-constexpr int Y_STRAP_RULE             = 22;
+// Top strap (no underline rule — cleaner)
+constexpr int Y_STRAP_BASELINE         = 20;
 
-// Hero (CPU | MEM). Label's trailing rule floats above the label baseline.
-constexpr int Y_HERO_LABEL             = 44;
-constexpr int Y_HERO_LABEL_RULE        = 40;
-constexpr int Y_HERO_NUMBER            = 76;
-constexpr int Y_HERO_NUMBER_RULE       = 84;
-constexpr int Y_HERO_BAR_TOP           = 88;
-constexpr int HERO_BAR_H               = 8;
-constexpr int Y_HERO_META              = 112;
+// Hero (CPU | MEM). No lines anywhere — typography + whitespace carry the
+// structure. Bigger label (helvB12), thicker progress bar (14 px).
+constexpr int Y_HERO_LABEL             = 56;
+constexpr int Y_HERO_NUMBER            = 100;
+constexpr int Y_HERO_BAR_TOP           = 110;
+constexpr int HERO_BAR_H               = 14;
 
-// Network row (single serif line, no sparkline)
-constexpr int Y_NET                    = 136;
+// Claude Session block — row spacing 32 px, bigger key/value fonts, 8-px bar.
+constexpr int Y_CLAUDE_HDR             = 166;
+constexpr int Y_CLAUDE_R1              = 196;
+constexpr int Y_CLAUDE_R2              = 228;
+constexpr int Y_CLAUDE_R3              = 260;
 
-// Claude Session block
-constexpr int Y_CLAUDE_HDR             = 164;
-constexpr int Y_CLAUDE_HDR_RULE        = 160;
-constexpr int Y_CLAUDE_R1              = 184;
-constexpr int Y_CLAUDE_R2              = 202;
-constexpr int Y_CLAUDE_R3              = 220;
-
-// Footer
-constexpr int Y_FOOT_RULE              = 248;
-constexpr int Y_FOOTER                 = 268;
+// Footer — sits close to the bottom edge, no line above it.
+constexpr int Y_FOOTER                 = 294;
 
 // ── Snapshot ─────────────────────────────────────────────────────────
 struct Snapshot {
@@ -92,36 +84,24 @@ static void progress_bar(int x, int y, int w, int h, int pct) {
 
 // ── Drawing ──────────────────────────────────────────────────────────
 static void draw_top_strap() {
-  gfx.fillRect(0, 0, LCD_W, 28, 0);
+  gfx.fillRect(0, 0, LCD_W, 30, 0);
 
   u8g2.setFont(u8g2_font_ncenR12_tf);
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
   if (snap.up[0]) { u8g2.print("  \u00B7  up "); u8g2.print(snap.up); }
-
-  hline(PAD_X, LCD_W - PAD_X - 1, Y_STRAP_RULE);
 }
 
 // Draws a hero half (CPU or MEM):
 //   LABEL ─────────────
 //   29%
-//   ─────────────
 //   [████████░░░░░░]
-//   meta
 static void draw_hero_half(int col_x, int col_w,
-                           const char* label,
-                           int pct,
-                           const char* meta) {
-  int x_right = col_x + col_w - PAD_X - 1;
-
-  // Label (small caps tracked)
-  u8g2.setFont(u8g2_font_helvB08_tf);
+                           const char* label, int pct) {
+  // Label (helvB12, no trailing rule — the label carries its own weight)
+  u8g2.setFont(u8g2_font_helvB12_tf);
   u8g2.setCursor(col_x + PAD_X, Y_HERO_LABEL);
   u8g2.print(label);
-  int lbl_w = u8g2.getUTF8Width(label);
-
-  // Trailing rule to the column edge
-  hline(col_x + PAD_X + lbl_w + 6, x_right, Y_HERO_LABEL_RULE);
 
   // Big number
   char num[8];
@@ -132,78 +112,39 @@ static void draw_hero_half(int col_x, int col_w,
   u8g2.print(num);
   int numw = u8g2.getUTF8Width(num);
 
-  // smaller "%"
-  u8g2.setFont(u8g2_font_ncenB14_tr);
+  // larger "%"
+  u8g2.setFont(u8g2_font_ncenB18_tr);
   u8g2.setCursor(col_x + PAD_X + numw + 3, Y_HERO_NUMBER);
   u8g2.print("%");
-
-  // Thin rule right under number
-  hline(col_x + PAD_X, x_right, Y_HERO_NUMBER_RULE);
 
   // Progress bar
   progress_bar(col_x + PAD_X, Y_HERO_BAR_TOP,
                col_w - 2 * PAD_X, HERO_BAR_H, pct);
-
-  // Meta line (serif)
-  u8g2.setFont(u8g2_font_ncenR10_tf);
-  u8g2.setCursor(col_x + PAD_X, Y_HERO_META);
-  u8g2.print(meta);
 }
 
 static void draw_hero_row() {
-  gfx.fillRect(0, 28, LCD_W, Y_HERO_META + 6 - 28, 0);
-
-  char cpu_meta[32];
-  snprintf(cpu_meta, sizeof(cpu_meta), "load %.2f", snap.load1);
-  draw_hero_half(0,   200, "CPU LOAD", snap.cpu_pct, cpu_meta);
-
-  char mem_meta[32];
-  snprintf(mem_meta, sizeof(mem_meta), "%.1f / %.1f GB",
-           snap.mem_used, snap.mem_tot);
-  draw_hero_half(200, 200, "MEMORY",   snap.mem_pct, mem_meta);
-}
-
-static void draw_net() {
-  gfx.fillRect(0, Y_NET - 14, LCD_W, 20, 0);
-
-  // Left: DOWN  0.00 MB/s
-  u8g2.setFont(u8g2_font_helvB08_tf);
-  u8g2.setCursor(PAD_X, Y_NET);
-  u8g2.print("DOWN");
-
-  u8g2.setFont(u8g2_font_ncenB12_tr);
-  char rx[20]; snprintf(rx, sizeof(rx), "%.2f MB/s", snap.net_rx);
-  u8g2.setCursor(PAD_X + 40, Y_NET);
-  u8g2.print(rx);
-
-  // Right: UP  0.00 MB/s
-  u8g2.setFont(u8g2_font_helvB08_tf);
-  u8g2.setCursor(200 + PAD_X, Y_NET);
-  u8g2.print("UP");
-
-  u8g2.setFont(u8g2_font_ncenB12_tr);
-  char tx[20]; snprintf(tx, sizeof(tx), "%.2f MB/s", snap.net_tx);
-  u8g2.setCursor(200 + PAD_X + 28, Y_NET);
-  u8g2.print(tx);
+  gfx.fillRect(0, 28, LCD_W, (Y_HERO_BAR_TOP + HERO_BAR_H + 4) - 28, 0);
+  draw_hero_half(0,   200, "CPU LOAD", snap.cpu_pct);
+  draw_hero_half(200, 200, "MEMORY",   snap.mem_pct);
 }
 
 static void draw_claude_row(int y_baseline, const char* key,
                             int pct, const char* reset_str) {
-  u8g2.setFont(u8g2_font_ncenR10_tf);
+  u8g2.setFont(u8g2_font_ncenR12_tf);
   u8g2.setCursor(PAD_X + 4, y_baseline);
   u8g2.print(key);
 
-  u8g2.setFont(u8g2_font_ncenB12_tr);
+  u8g2.setFont(u8g2_font_ncenB14_tr);
   char pbuf[8];
   if (pct < 0) snprintf(pbuf, sizeof(pbuf), "--");
   else         snprintf(pbuf, sizeof(pbuf), "%d%%", pct);
-  u8g2.setCursor(PAD_X + 64, y_baseline);
+  u8g2.setCursor(PAD_X + 72, y_baseline);
   u8g2.print(pbuf);
 
-  int bx = PAD_X + 108, bw = 180, by = y_baseline - 7;
-  progress_bar(bx, by, bw, 6, pct);
+  int bx = PAD_X + 120, bw = 170, by = y_baseline - 9;
+  progress_bar(bx, by, bw, 10, pct);
 
-  u8g2.setFont(u8g2_font_ncenR10_tf);
+  u8g2.setFont(u8g2_font_ncenR12_tf);
   const char* rs = (reset_str && reset_str[0]) ? reset_str : "\u2014";  // em dash
   int rw = u8g2.getUTF8Width(rs);
   u8g2.setCursor(LCD_W - PAD_X - rw, y_baseline);
@@ -211,15 +152,12 @@ static void draw_claude_row(int y_baseline, const char* key,
 }
 
 static void draw_claude() {
-  gfx.fillRect(0, Y_CLAUDE_HDR - 12, LCD_W,
-               (Y_CLAUDE_R3 + 6) - (Y_CLAUDE_HDR - 12), 0);
+  gfx.fillRect(0, Y_CLAUDE_HDR - 14, LCD_W,
+               (Y_CLAUDE_R3 + 6) - (Y_CLAUDE_HDR - 14), 0);
 
-  u8g2.setFont(u8g2_font_helvB08_tf);
+  u8g2.setFont(u8g2_font_helvB12_tf);
   u8g2.setCursor(PAD_X, Y_CLAUDE_HDR);
   u8g2.print("CLAUDE SESSION");
-  int hdrw = u8g2.getUTF8Width("CLAUDE SESSION");
-
-  hline(PAD_X + hdrw + 8, LCD_W - PAD_X - 1, Y_CLAUDE_HDR_RULE);
 
   draw_claude_row(Y_CLAUDE_R1, "Context", snap.cld_ctx, nullptr);
   draw_claude_row(Y_CLAUDE_R2, "5 h",     snap.cld_5h,  snap.cld_5h_r);
@@ -227,23 +165,21 @@ static void draw_claude() {
 }
 
 static void draw_footer() {
-  gfx.fillRect(0, Y_FOOT_RULE - 2, LCD_W, LCD_H - (Y_FOOT_RULE - 2), 0);
-  hline(PAD_X, LCD_W - PAD_X - 1, Y_FOOT_RULE);
+  gfx.fillRect(0, Y_FOOTER - 14, LCD_W, LCD_H - (Y_FOOTER - 14), 0);
 
-  // Left: DISK + bar
-  u8g2.setFont(u8g2_font_helvB08_tf);
+  // Left: DISK <used> / <total> GB — no bar, just the numbers, no rule above.
+  u8g2.setFont(u8g2_font_helvB12_tf);
   u8g2.setCursor(PAD_X, Y_FOOTER);
   u8g2.print("DISK");
 
-  u8g2.setFont(u8g2_font_ncenR10_tf);
+  u8g2.setFont(u8g2_font_ncenR12_tf);
   char dbuf[32];
   snprintf(dbuf, sizeof(dbuf), "%.0f / %.0f GB", snap.disk_used, snap.disk_tot);
-  u8g2.setCursor(PAD_X + 32, Y_FOOTER);
+  u8g2.setCursor(PAD_X + 44, Y_FOOTER);
   u8g2.print(dbuf);
-  int dw = u8g2.getUTF8Width(dbuf);
-  progress_bar(PAD_X + 32 + dw + 8, Y_FOOTER - 7, 50, 5, snap.disk_pct);
 
   // Right: "last Xs · by mole & xian"
+  u8g2.setFont(u8g2_font_ncenR12_tf);
   char buf[64];
   if (snap.last_update_ms == 0)
     snprintf(buf, sizeof(buf), "waiting  \u00B7  by mole & xian");
@@ -261,7 +197,6 @@ static void render_all() {
   gfx.fillRect(0, 0, LCD_W, LCD_H, 0);
   draw_top_strap();
   draw_hero_row();
-  draw_net();
   draw_claude();
   draw_footer();
   gfx.flush();

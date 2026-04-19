@@ -57,12 +57,12 @@ ESPS3/
 
 ## 当前功能
 
-- ✅ 顶栏硬件 strap：`Mac mini · Apple M4 · 32.0GB · up 8d 12h`
-- ✅ CPU LOAD 大数字 + 进度条 + load average
-- ✅ MEMORY 大数字 + 进度条 + 已用/总量
-- ✅ NET: DOWN / UP 实时速率
-- ✅ CLAUDE SESSION: Context % / 5h % / 7d %，带进度条和重置时间
+- ✅ 顶栏硬件 strap：`Mac mini · Apple M4 · 32.0GB · up 8d 13h`
+- ✅ CPU LOAD 大数字 + 进度条
+- ✅ MEMORY 大数字 + 进度条
+- ✅ CLAUDE SESSION：Context % / 5h % / 7d %，带进度条和重置时间
 - ✅ DISK 占用 + 更新时间戳 + 归属标签
+- ✅ 纯字体层级 + 留白分区，**整屏无横线**
 
 ## 硬件要点
 
