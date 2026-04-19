@@ -90,9 +90,11 @@ struct Battery {
   int pct = -1;   // 0..100, or -1 = not present / unknown
 } batt;
 
-enum class Src { USB, BLE };
-static Src      last_src    = Src::USB;
-static uint32_t last_src_ms = 0;
+// Separate timestamps per transport. Keeping them independent means two
+// bridges can run in parallel (USB + BLE) without the tag flickering as
+// frames interleave — active_transport() picks a stable winner instead.
+static uint32_t last_usb_ms = 0;
+static uint32_t last_ble_ms = 0;
 
 // ── Drawing helpers ──────────────────────────────────────────────────
 static void progress_bar(int x, int y, int w, int h, int pct) {
@@ -116,12 +118,15 @@ static void update_battery() {
   batt.pct = constrain(pct, 0, 100);
 }
 
-// Name the transport that most recently delivered a data line, or the one
-// currently connected. Returns nullptr when there's nothing to show.
+// Pick the winning transport tag. USB gets priority when present because
+// that's also the development / power-charging path, so developers see
+// "USB" stable even if BLE is also delivering frames. Falls through to
+// BLE, then a bare "BLE" while connected but silent, then nullptr.
 static const char* active_transport() {
-  uint32_t age = millis() - last_src_ms;
-  if (age < 5000) return (last_src == Src::BLE) ? "BLE" : "USB";
-  if (ble_connected()) return "BLE";
+  uint32_t now = millis();
+  if (now - last_usb_ms < 5000) return "USB";
+  if (now - last_ble_ms < 5000) return "BLE";
+  if (ble_connected())          return "BLE";
   return nullptr;
 }
 
@@ -389,7 +394,7 @@ static void handle_shot() {
   Serial.flush();
 }
 
-static void consume_line_impl(const String& line, Src src) {
+static void consume_line_impl(const String& line) {
   if (line == "SHOT") { handle_shot(); return; }
 
   JsonDocument doc;
@@ -398,18 +403,18 @@ static void consume_line_impl(const String& line, Src src) {
     Serial.printf("JSON parse error: %s (len=%d)\n", err.c_str(), line.length());
     return;
   }
-  last_src    = src;
-  last_src_ms = millis();
   apply_snapshot(doc);
   render_all();
 }
 
 static void consume_line_from_usb(const String& line) {
-  consume_line_impl(line, Src::USB);
+  last_usb_ms = millis();
+  consume_line_impl(line);
 }
 
 static void consume_line_from_ble(const String& line) {
-  consume_line_impl(line, Src::BLE);
+  last_ble_ms = millis();
+  consume_line_impl(line);
 }
 
 static void pump_serial() {

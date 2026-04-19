@@ -33,17 +33,22 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
-# If launchd is managing the bridge, we just kick it and let launchd respawn;
-# otherwise we pkill + nohup-restart ourselves.
+# If launchd is managing the USB bridge we just stop it — launchd will
+# respawn it within ThrottleInterval (5s). Otherwise pkill + nohup-restart
+# ourselves. The BLE bridge is never touched; it doesn't hold the serial
+# port, so shot.py can coexist with it.
 launchd_managed=0
-if launchctl list com.esps3.bridge >/dev/null 2>&1; then
-  launchd_managed=1
-fi
+for label in com.esps3.bridge.usb com.esps3.bridge; do
+  if launchctl list "$label" >/dev/null 2>&1; then
+    launchd_managed=1
+    break
+  fi
+done
 
 had_bridge=0
-if pgrep -f mole-bridge.py >/dev/null 2>&1; then
+if pgrep -f 'mole-bridge\.py' >/dev/null 2>&1; then
   had_bridge=1
-  pkill -f mole-bridge.py || true
+  pkill -f 'mole-bridge\.py' || true
   sleep 0.8
 fi
 
