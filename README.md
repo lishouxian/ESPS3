@@ -17,24 +17,33 @@ Waveshare **ESP32-S3-RLCD-4.2** 开发板：4.2″ 反射式 LCD（300×400，1-
 - [`docs/05-mole-dashboard.md`](docs/05-mole-dashboard.md) — **当前架构：Mac 状态 + Claude 状态桥接**
 - [`docs/06-ink-on-paper.md`](docs/06-ink-on-paper.md) — 设计方向、字体、布局理由
 - [`docs/07-shot-tool.md`](docs/07-shot-tool.md) — 从板子直接读回 framebuffer 存 PNG
+- [`docs/08-deployment.md`](docs/08-deployment.md) — **部署到新 Mac**（一键 installer + launchd 自启）
 
 ## 快速开始
 
+### 只想把一块装好的板子挂到 Mac 上
+
 ```bash
-# 装 PlatformIO（macOS）
+git clone https://github.com/lishouxian/ESPS3 ~/ESPS3
+cd ~/ESPS3
+tools/install.sh --autostart   # 一键：依赖 + wrappers + launchd 自启
+```
+
+插上板子，屏幕自动亮起。详见 [docs/08-deployment.md](docs/08-deployment.md)。
+
+### 开发机（要改代码 / 烧固件）
+
+```bash
+# 装 PlatformIO + 编译烧录
 brew install platformio
-
-# 插板子 Type-C，识别为 /dev/cu.usbmodemXXXX
-pio device list
-
-# 编译 + 烧录
 pio run -t upload
 
-# 启动 Host 桥（需要 Mac 上装了 mole 并开启了 Claude statusline 缓存）
-python3 tools/mole-bridge.py --interval 2
+# 装运行依赖
+tools/install.sh
 
-# 截板子此刻画面 → /tmp/esps3-shot.png
-tools/shot.sh
+# 日常
+esps3-bridge   # 跑 bridge（前台）
+esps3-shot     # 截当前屏存 /tmp/esps3-shot.png
 ```
 
 ## 工程结构

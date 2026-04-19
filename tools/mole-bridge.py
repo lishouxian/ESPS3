@@ -23,6 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import serial  # pyserial
+from serial.tools import list_ports
+
+# Espressif Systems USB VID — matches ESP32-S3 native USB CDC.
+ESPRESSIF_VID = 0x303A
 
 # ── Config ────────────────────────────────────────────────────────────
 SPARK_N = 48      # must match Snapshot::SPARK_N in src/main.cpp
@@ -216,6 +220,13 @@ def build_frame(m: dict) -> dict:
     return frame
 
 # ── Serial output ─────────────────────────────────────────────────────
+def find_esps3_port() -> str | None:
+    """Pick first serial port that matches the ESP32-S3 Espressif VID."""
+    for p in list_ports.comports():
+        if p.vid == ESPRESSIF_VID:
+            return p.device
+    return None
+
 def open_serial(port: str, baud: int) -> serial.Serial:
     s = serial.Serial()
     s.port = port
@@ -232,7 +243,8 @@ def open_serial(port: str, baud: int) -> serial.Serial:
 # ── Main loop ─────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--port", default="/dev/cu.usbmodem1101")
+    p.add_argument("--port", default=None,
+                   help="serial port (auto-detected if omitted)")
     p.add_argument("--baud", type=int, default=115200)
     p.add_argument("--interval", type=float, default=2.0)
     p.add_argument("--verbose", action="store_true")
@@ -243,9 +255,15 @@ def main():
     while running:
         try:
             if ser is None or not ser.is_open:
-                print(f"[mole-bridge] opening {args.port} @ {args.baud}",
+                port = args.port or find_esps3_port()
+                if port is None:
+                    print("[mole-bridge] no ESP32-S3 serial port found; "
+                          "retrying in 3s", file=sys.stderr)
+                    time.sleep(3)
+                    continue
+                print(f"[mole-bridge] opening {port} @ {args.baud}",
                       file=sys.stderr)
-                ser = open_serial(args.port, args.baud)
+                ser = open_serial(port, args.baud)
 
             snap = mole_snapshot()
             if snap is None:

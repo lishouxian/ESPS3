@@ -20,7 +20,16 @@ import time
 from pathlib import Path
 
 import serial        # pyserial
+from serial.tools import list_ports
 from PIL import Image
+
+ESPRESSIF_VID = 0x303A
+
+def find_esps3_port() -> str | None:
+    for p in list_ports.comports():
+        if p.vid == ESPRESSIF_VID:
+            return p.device
+    return None
 
 
 def wait_begin(s: serial.Serial, deadline: float):
@@ -76,14 +85,20 @@ def decode_st7305_landscape(raw: bytes, w: int, h: int) -> Image.Image:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", default="/dev/cu.usbmodem1101")
+    ap.add_argument("--port", default=None,
+                    help="serial port (auto-detected if omitted)")
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--out",  default="/tmp/esps3-shot.png")
     ap.add_argument("--timeout", type=float, default=5.0)
     args = ap.parse_args()
 
+    port = args.port or find_esps3_port()
+    if port is None:
+        print("No ESP32-S3 serial port found.", file=sys.stderr)
+        sys.exit(1)
+
     s = serial.Serial()
-    s.port = args.port
+    s.port = port
     s.baudrate = args.baud
     s.timeout = 0.2
     s.dtr = False
