@@ -206,57 +206,6 @@ static void draw_top_strap() {
   u8g2.setFont(u8g2_font_ncenR12_tf);
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
-
-  // Right cluster, right-aligned:
-  //     "<transport> \u00B7 " [battery] "<n>%" [bolt-if-charging]
-  // Icons sit visually centered on the text cap row (y ~= baseline - 5).
-  const char* tp        = active_transport();
-  bool        has_cell  = batt.pct >= 0;
-  bool        show_bolt = has_cell && charging_hint();
-
-  char prefix[16] = {0};
-  if (tp) snprintf(prefix, sizeof(prefix), "%s  ", tp);
-
-  char pct_txt[8] = {0};
-  if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
-
-  constexpr int GAP       = 4;
-  constexpr int BATT_SLOT = BATT_W + 2 + GAP;   // body + nub + gap
-
-  int prefix_w = prefix[0]  ? u8g2.getUTF8Width(prefix)  : 0;
-  int pct_w    = pct_txt[0] ? u8g2.getUTF8Width(pct_txt) : 0;
-  int icon_w   = has_cell   ? BATT_SLOT                  : 0;
-  int bolt_w   = show_bolt  ? GAP + BOLT_W               : 0;
-
-  int total = prefix_w + icon_w + pct_w + bolt_w;
-  if (total == 0) return;
-
-  // Align icon tops with the cap line of the strap font. u8g2 reports the
-  // ascent for the currently set font; icons are sized to match, so placing
-  // their top edge at (baseline - ascent) lines them up with the caps of
-  // "95%" next to them rather than sitting visibly lower.
-  int ascent = u8g2.getFontAscent();
-  int y_batt = Y_STRAP_BASELINE - ascent;
-  int y_bolt = Y_STRAP_BASELINE - ascent;
-
-  int x = LCD_W - PAD_X - total;
-  if (prefix[0]) {
-    u8g2.setCursor(x, Y_STRAP_BASELINE);
-    u8g2.print(prefix);
-    x += prefix_w;
-  }
-  if (has_cell) {
-    draw_batt_icon(x, y_batt, batt.pct);
-    x += icon_w;
-  }
-  if (pct_txt[0]) {
-    u8g2.setCursor(x, Y_STRAP_BASELINE);
-    u8g2.print(pct_txt);
-    x += pct_w;
-  }
-  if (show_bolt) {
-    draw_bolt(x + GAP, y_bolt);
-  }
 }
 
 // Draws a hero half (CPU or MEM):
@@ -334,9 +283,47 @@ static void draw_claude() {
 static void draw_footer() {
   gfx.fillRect(0, Y_FOOTER - 14, LCD_W, LCD_H - (Y_FOOTER - 14), 0);
 
-  // Right: "last Xs · by mole & xian". Disk total now lives on the top
-  // strap alongside the other static machine specs.
+  // Left cluster, left-aligned at PAD_X:
+  //     "<transport> \u00B7 " [battery] "<n>%" [bolt-if-charging]
+  // Same piece that used to live on the top strap — moved down so the top
+  // strap can stay clean with just the static machine specs.
   u8g2.setFont(u8g2_font_ncenR12_tf);
+  const char* tp        = active_transport();
+  bool        has_cell  = batt.pct >= 0;
+  bool        show_bolt = has_cell && charging_hint();
+
+  char prefix[16] = {0};
+  if (tp) snprintf(prefix, sizeof(prefix), "%s  ", tp);
+
+  char pct_txt[8] = {0};
+  if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
+
+  constexpr int GAP       = 4;
+  constexpr int BATT_SLOT = BATT_W + 2 + GAP;   // body + nub + gap
+
+  int ascent = u8g2.getFontAscent();
+  int y_icon = Y_FOOTER - ascent;
+
+  int x = PAD_X;
+  if (prefix[0]) {
+    u8g2.setCursor(x, Y_FOOTER);
+    u8g2.print(prefix);
+    x += u8g2.getUTF8Width(prefix);
+  }
+  if (has_cell) {
+    draw_batt_icon(x, y_icon, batt.pct);
+    x += BATT_SLOT;
+  }
+  if (pct_txt[0]) {
+    u8g2.setCursor(x, Y_FOOTER);
+    u8g2.print(pct_txt);
+    x += u8g2.getUTF8Width(pct_txt);
+  }
+  if (show_bolt) {
+    draw_bolt(x + GAP, y_icon);
+  }
+
+  // Right: "last Xs · by mole & xian".
   char buf[64];
   if (snap.last_update_ms == 0)
     snprintf(buf, sizeof(buf), "waiting  \u00B7  by mole & xian");
@@ -491,23 +478,23 @@ void loop() {
     gfx.flush();
   }
 
-  // Battery + strap tick — 5s. Battery changes slowly; re-reading the ADC
-  // this often is essentially free and keeps the displayed % fresh.
+  // Battery tick — 5s. Battery changes slowly; re-reading the ADC this
+  // often is essentially free and keeps the displayed % fresh. The 1 s
+  // footer tick above already redraws the battery cluster, so we only
+  // need to refresh the ADC here (no explicit draw call).
   static uint32_t last_batt_ms = 0;
   if (now - last_batt_ms > 5000) {
     last_batt_ms = now;
     update_battery();
-    draw_top_strap();
-    gfx.flush();
   }
 
-  // Re-render the strap immediately when BLE (dis)connects so the transport
-  // tag flips without waiting for the 5s tick.
+  // Re-render the footer immediately when BLE (dis)connects so the
+  // transport tag flips without waiting for the 1 s tick.
   static bool last_ble = false;
   bool now_ble = ble_connected();
   if (now_ble != last_ble) {
     last_ble = now_ble;
-    draw_top_strap();
+    draw_footer();
     gfx.flush();
   }
 
