@@ -125,6 +125,43 @@ static const char* active_transport() {
   return nullptr;
 }
 
+// A 1S lithium cell can't hold >4.1 V open-circuit, so seeing that on VBAT
+// means current is flowing into it — i.e. USB power + charger are active.
+static inline bool charging_hint() { return batt.mv > 4150; }
+
+// ── Icons ────────────────────────────────────────────────────────────
+// Small zigzag bolt, 4 wide × 7 tall. Drawn in `color` so it can appear
+// either as black ink on white paper, or punched through a filled battery
+// body (color 0 = erase).
+static void draw_bolt(int x, int y, int color) {
+  gfx.drawLine(x+2, y+0, x+3, y+0, color);
+  gfx.drawLine(x+1, y+1, x+3, y+1, color);
+  gfx.drawLine(x+0, y+2, x+3, y+2, color);
+  gfx.drawLine(x+0, y+3, x+2, y+3, color);
+  gfx.drawLine(x+1, y+4, x+3, y+4, color);
+  gfx.drawLine(x+0, y+5, x+2, y+5, color);
+  gfx.drawPixel(x+0, y+6, color);
+}
+
+// iOS-style battery pill: 15 × 9 body, 2 × 3 terminal nub (total 17 wide).
+// Charging → solid black fill with a white bolt punched through, same
+// idiom as macOS / iOS so it reads instantly.
+static void draw_batt_icon(int x, int y, int pct, bool charging) {
+  constexpr int BW = 15, BH = 9;
+  gfx.drawRect(x, y, BW, BH, 1);
+  gfx.fillRect(x + BW, y + 3, 2, 3, 1);
+
+  if (charging) {
+    gfx.fillRect(x + 1, y + 1, BW - 2, BH - 2, 1);
+    // Bolt nicely centered inside the body.
+    draw_bolt(x + (BW - 4) / 2, y + 1, 0);
+  } else {
+    int inner = BW - 4;
+    int fill  = inner * constrain(pct, 0, 100) / 100;
+    if (fill > 0) gfx.fillRect(x + 2, y + 2, fill, BH - 4, 1);
+  }
+}
+
 // ── Drawing ──────────────────────────────────────────────────────────
 static void draw_top_strap() {
   gfx.fillRect(0, 0, LCD_W, 30, 0);
@@ -133,21 +170,42 @@ static void draw_top_strap() {
   u8g2.setCursor(PAD_X, Y_STRAP_BASELINE);
   u8g2.print(snap.hw);
 
-  // Right cluster: "<transport> \u00B7 <n>%"
-  // Each piece is optional; rendered only when present.
-  char right[48] = {0};
-  const char* tp = active_transport();
-  if (tp && batt.pct >= 0) {
-    snprintf(right, sizeof(right), "%s \u00B7 %d%%", tp, batt.pct);
-  } else if (batt.pct >= 0) {
-    snprintf(right, sizeof(right), "%d%%", batt.pct);
-  } else if (tp) {
-    snprintf(right, sizeof(right), "%s", tp);
+  // Right cluster: right-aligned. Compose
+  //     "<transport> \u00B7 " [battery-icon] "<n>%"
+  // The bolt lives *inside* the battery when charging (iOS idiom), so
+  // there's no separate lightning glyph competing for horizontal space.
+  const char* tp       = active_transport();
+  bool        has_cell = batt.pct >= 0;
+
+  char prefix[16] = {0};
+  if (tp) snprintf(prefix, sizeof(prefix), "%s \u00B7 ", tp);
+
+  char pct_txt[8] = {0};
+  if (has_cell) snprintf(pct_txt, sizeof(pct_txt), "%d%%", batt.pct);
+
+  constexpr int BATT_W = 17;  // 15 body + 2 terminal nub
+  constexpr int GAP    = 4;
+
+  int prefix_w = prefix[0]  ? u8g2.getUTF8Width(prefix)  : 0;
+  int pct_w    = pct_txt[0] ? u8g2.getUTF8Width(pct_txt) : 0;
+  int icon_w   = has_cell   ? BATT_W + GAP               : 0;
+
+  int total = prefix_w + icon_w + pct_w;
+  if (total == 0) return;
+
+  int x = LCD_W - PAD_X - total;
+  if (prefix[0]) {
+    u8g2.setCursor(x, Y_STRAP_BASELINE);
+    u8g2.print(prefix);
+    x += prefix_w;
   }
-  if (right[0]) {
-    int rw = u8g2.getUTF8Width(right);
-    u8g2.setCursor(LCD_W - PAD_X - rw, Y_STRAP_BASELINE);
-    u8g2.print(right);
+  if (has_cell) {
+    draw_batt_icon(x, Y_STRAP_BASELINE - 12, batt.pct, charging_hint());
+    x += icon_w;
+  }
+  if (pct_txt[0]) {
+    u8g2.setCursor(x, Y_STRAP_BASELINE);
+    u8g2.print(pct_txt);
   }
 }
 
